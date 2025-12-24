@@ -2,7 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateTicketDto } from './dto/create-ticket.dto';
 import { UpdateTicketDto } from './dto/update-ticket.dto';
-import { Priority } from '@prisma/client';
+import { Priority, ProblemCategory, ProblemSubcategory } from '@prisma/client';
 import * as path from 'path';
 import * as fs from 'fs';
 
@@ -39,13 +39,13 @@ export class TicketsService {
       title: createTicketDto.title,
       description: createTicketDto.description,
       equipmentName: createTicketDto.equipmentName,
-      priority: (createTicketDto.priority as Priority) || Priority.MEDIUM,
+      priority: createTicketDto.priority || Priority.MEDIUM,
       userId,
       // Provide defaults for required fields
       location: createTicketDto.location || 'N/A',
       category: createTicketDto.category || 'OTHER',
-      problemCategory: createTicketDto.problemCategory || 'HARDWARE',
-      problemSubcategory: createTicketDto.problemSubcategory || 'OTHER',
+      problemCategory: createTicketDto.problemCategory || ProblemCategory.HARDWARE,
+      problemSubcategory: createTicketDto.problemSubcategory || ProblemSubcategory.OTHER,
     };
 
     // Add optional repair ticket fields if provided

@@ -13,12 +13,10 @@ export class CreateTicketDto {
   @IsString()
   description: string;
 
-  @IsString()
   @IsEnum(ProblemCategory)
   @IsOptional()
   problemCategory?: ProblemCategory;
 
-  @IsString()
   @IsEnum(ProblemSubcategory)
   @IsOptional()
   problemSubcategory?: ProblemSubcategory;
@@ -34,7 +32,6 @@ export class CreateTicketDto {
   @IsOptional()
   category?: string;
 
-  @IsString()
   @IsEnum(Priority)
   @IsOptional()
   priority?: Priority;
