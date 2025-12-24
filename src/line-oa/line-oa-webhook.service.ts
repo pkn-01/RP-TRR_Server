@@ -2,6 +2,7 @@ import { Injectable, Logger, UnauthorizedException } from '@nestjs/common';
 import crypto from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
 import { LineOALinkingService } from './line-oa-linking.service';
+import { LineOAService } from './line-oa.service';
 
 @Injectable()
 export class LineOAWebhookService {
@@ -11,6 +12,7 @@ export class LineOAWebhookService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly linkingService: LineOALinkingService,
+    private readonly lineOAService: LineOAService,
   ) {}
 
   /**
@@ -107,6 +109,117 @@ export class LineOAWebhookService {
     const message = event.message;
 
     this.logger.log(`Received message from ${lineUserId}: ${message.text}`);
+
+    // ตอบกลับด้วย Flex Message ที่มีข้อมูลและปุ่มต่างๆ
+    if (message.type === 'text') {
+      await this.sendWelcomeMenu(lineUserId);
+    }
+  }
+
+  /**
+   * ส่ง Welcome Menu ไปยัง LINE User
+   */
+  private async sendWelcomeMenu(lineUserId: string) {
+    const flexMessage = {
+      type: 'flex',
+      altText: 'เมนูระบบแจ้งซ่อม',
+      contents: {
+        type: 'bubble',
+        header: {
+          type: 'box',
+          layout: 'vertical',
+          contents: [
+            {
+              type: 'text',
+              text: 'ระบบแจ้งซ่อม',
+              weight: 'bold',
+              size: 'xl',
+              color: '#FFFFFF',
+              align: 'center',
+            },
+          ],
+          backgroundColor: '#1F88E5',
+          paddingAll: '15px',
+        },
+        body: {
+          type: 'box',
+          layout: 'vertical',
+          contents: [
+            {
+              type: 'text',
+              text: 'เลือกสิ่งที่คุณต้องการทำ',
+              weight: 'bold',
+              size: 'lg',
+              margin: 'md',
+            },
+            {
+              type: 'box',
+              layout: 'vertical',
+              margin: 'md',
+              spacing: 'sm',
+              contents: [
+                {
+                  type: 'button',
+                  style: 'primary',
+                  height: 'sm',
+                  action: {
+                    type: 'uri',
+                    label: '📋 สร้างแจ้งซ่อมใหม่',
+                    uri: `${process.env.FRONTEND_URL || 'https://localhost:3000'}/tickets/create-line-oa?lineUserId=${lineUserId}`,
+                  },
+                },
+                {
+                  type: 'button',
+                  style: 'secondary',
+                  height: 'sm',
+                  action: {
+                    type: 'uri',
+                    label: '📊 ดูสถานะการแจ้งซ่อม',
+                    uri: `${process.env.FRONTEND_URL || 'https://localhost:3000'}/tickets/line-oa-status?lineUserId=${lineUserId}`,
+                  },
+                },
+                {
+                  type: 'button',
+                  style: 'secondary',
+                  height: 'sm',
+                  action: {
+                    type: 'uri',
+                    label: '🔗 เชื่อมต่อบัญชี',
+                    uri: `${process.env.FRONTEND_URL || 'https://localhost:3000'}/line-oa/link?lineUserId=${lineUserId}`,
+                  },
+                },
+              ],
+            },
+          ],
+          spacing: 'md',
+          paddingAll: '13px',
+        },
+        footer: {
+          type: 'box',
+          layout: 'vertical',
+          spacing: 'sm',
+          contents: [
+            {
+              type: 'divider',
+            },
+            {
+              type: 'text',
+              text: 'สามารถกรอกแบบฟอร์มแจ้งซ่อมได้ทันทีโดยไม่ต้องเชื่อมต่อบัญชี',
+              size: 'xs',
+              color: '#aaaaaa',
+              wrap: true,
+            },
+          ],
+          paddingAll: '13px',
+        },
+      },
+    };
+
+    try {
+      await this.lineOAService.sendMessage(lineUserId, flexMessage as any);
+    } catch (error) {
+      this.logger.error(`Failed to send welcome menu to ${lineUserId}:`, error);
+    }
   }
 
   /**
@@ -117,5 +230,132 @@ export class LineOAWebhookService {
     const postbackData = event.postback.data;
 
     this.logger.log(`Received postback from ${lineUserId}: ${postbackData}`);
+  }
+
+  /**
+   * ส่งสถานะการแจ้งซ่อมไปยัง LINE
+   */
+  async sendTicketStatusToLINE(
+    lineUserId: string,
+    ticketId: number,
+    ticketCode: string,
+    status: string,
+    statusLabel: string,
+  ) {
+    const statusColor = this.getStatusColor(status);
+    const flexMessage = {
+      type: 'flex',
+      altText: `อัพเดตสถานะแจ้งซ่อม ${ticketCode}`,
+      contents: {
+        type: 'bubble',
+        header: {
+          type: 'box',
+          layout: 'vertical',
+          contents: [
+            {
+              type: 'text',
+              text: 'อัพเดตสถานะการแจ้งซ่อม',
+              weight: 'bold',
+              size: 'lg',
+              color: '#FFFFFF',
+            },
+          ],
+          backgroundColor: statusColor,
+          paddingAll: '15px',
+        },
+        body: {
+          type: 'box',
+          layout: 'vertical',
+          contents: [
+            {
+              type: 'text',
+              text: ticketCode,
+              weight: 'bold',
+              size: 'lg',
+              margin: 'md',
+            },
+            {
+              type: 'separator',
+              margin: 'md',
+            },
+            {
+              type: 'box',
+              layout: 'vertical',
+              margin: 'md',
+              spacing: 'sm',
+              contents: [
+                {
+                  type: 'box',
+                  layout: 'baseline',
+                  spacing: 'sm',
+                  contents: [
+                    {
+                      type: 'text',
+                      text: 'สถานะ:',
+                      color: '#aaaaaa',
+                      size: 'sm',
+                      flex: 0,
+                    },
+                    {
+                      type: 'text',
+                      text: statusLabel,
+                      wrap: true,
+                      color: statusColor,
+                      weight: 'bold',
+                      flex: 5,
+                    },
+                  ],
+                },
+              ],
+            },
+          ],
+          spacing: 'md',
+          paddingAll: '13px',
+        },
+        footer: {
+          type: 'box',
+          layout: 'vertical',
+          spacing: 'sm',
+          contents: [
+            {
+              type: 'button',
+              style: 'link',
+              height: 'sm',
+              action: {
+                type: 'uri',
+                label: '👁 ดูรายละเอียด',
+                uri: `${process.env.FRONTEND_URL || 'https://localhost:3000'}/tickets/${ticketId}?lineUserId=${lineUserId}`,
+              },
+            },
+          ],
+          paddingAll: '13px',
+        },
+      },
+    };
+
+    try {
+      await this.lineOAService.sendMessage(lineUserId, flexMessage as any);
+    } catch (error) {
+      this.logger.error(
+        `Failed to send ticket status to ${lineUserId}:`,
+        error,
+      );
+    }
+  }
+
+  /**
+   * ได้รับสี statuscolor ตามสถานะ
+   */
+  private getStatusColor(status: string): string {
+    switch (status) {
+      case 'OPEN':
+        return '#FFB81C'; // amber
+      case 'IN_PROGRESS':
+        return '#1F88E5'; // blue
+      case 'DONE':
+        return '#17C950'; // green
+      default:
+        return '#666666';
+    }
   }
 }

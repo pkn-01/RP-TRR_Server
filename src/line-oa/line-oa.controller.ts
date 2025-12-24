@@ -94,6 +94,50 @@ export class LineOAController {
     );
   }
 
+  /**
+   * ส่งสถานะการแจ้งซ่อมไปยัง LINE
+   */
+  @Post('send-ticket-status')
+  async sendTicketStatus(
+    @Body('lineUserId') lineUserId: string,
+    @Body('ticketId') ticketId: number,
+    @Body('ticketCode') ticketCode: string,
+    @Body('status') status: string,
+    @Body('statusLabel') statusLabel: string,
+  ) {
+    if (!lineUserId || !ticketId || !ticketCode || !status) {
+      return {
+        success: false,
+        message: 'Missing required parameters',
+      };
+    }
+
+    await this.webhookService.sendTicketStatusToLINE(
+      lineUserId,
+      ticketId,
+      ticketCode,
+      status,
+      statusLabel || this.getStatusLabelThai(status),
+    );
+
+    return {
+      success: true,
+      message: 'Ticket status sent to LINE',
+    };
+  }
+
+  /**
+   * แปลงสถานะเป็นภาษาไทย
+   */
+  private getStatusLabelThai(status: string): string {
+    const statusMap: { [key: string]: string } = {
+      OPEN: 'รอรับเรื่อง',
+      IN_PROGRESS: 'กำลังซ่อม',
+      DONE: 'ซ่อมเสร็จแล้ว',
+    };
+    return statusMap[status] || status;
+  }
+
   // ===================== Health Check =====================
 
   /**

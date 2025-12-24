@@ -13,6 +13,7 @@ import {
   NotFoundException,
   BadRequestException,
   InternalServerErrorException,
+  Header,
 } from '@nestjs/common';
 import { FilesInterceptor } from '@nestjs/platform-express';
 import { JwtAuthGuard } from '../auth/jwt.guard';
@@ -21,11 +22,11 @@ import { CreateTicketDto } from './dto/create-ticket.dto';
 import { UpdateTicketDto } from './dto/update-ticket.dto';
 
 @Controller('api/tickets')
-@UseGuards(JwtAuthGuard)
 export class TicketsController {
   constructor(private ticketsService: TicketsService) {}
 
   @Post()
+  @UseGuards(JwtAuthGuard)
   @UseInterceptors(FilesInterceptor('files', 5))
   async create(
     @Request() req: any,
@@ -76,7 +77,47 @@ export class TicketsController {
     }
   }
 
+  /**
+   * สร้าง Ticket สำหรับ LINE OA (ไม่ต้องเข้าสู่ระบบ)
+   */
+  @Post('line-oa')
+  @UseInterceptors(FilesInterceptor('files', 5))
+  async createLineOATicket(
+    @Body() body: any,
+    @Header('X-LINE-USER-ID') lineUserId?: string,
+    @UploadedFiles() files?: any[],
+  ) {
+    try {
+      console.log('[DEBUG] LINE OA Ticket creation');
+      console.log('[DEBUG] LINE User ID:', lineUserId);
+      console.log('[DEBUG] Files received:', files?.length || 0);
+
+      const formFields = body || {};
+      
+      const createTicketDto = new CreateTicketDto();
+      
+      createTicketDto.title = (formFields.title || '').toString().trim();
+      createTicketDto.description = (formFields.description || '').toString().trim();
+      createTicketDto.category = (formFields.category || 'REPAIR').toString();
+      createTicketDto.equipmentName = (formFields.equipmentName || '').toString().trim();
+      createTicketDto.location = (formFields.location || 'N/A').toString().trim();
+      createTicketDto.priority = (formFields.priority || 'MEDIUM').toString();
+      createTicketDto.problemCategory = formFields.problemCategory;
+      createTicketDto.problemSubcategory = formFields.problemSubcategory;
+      createTicketDto.notes = formFields.notes;
+      createTicketDto.lineUserId = lineUserId;
+      createTicketDto.phoneNumber = formFields.phoneNumber;
+      createTicketDto.lineId = formFields.lineId;
+
+      return await this.ticketsService.createLineOATicket(createTicketDto, files, lineUserId);
+    } catch (error: any) {
+      console.error('[ERROR] LINE OA Ticket creation error:', error);
+      throw error;
+    }
+  }
+
   @Get()
+  @UseGuards(JwtAuthGuard)
   findAll(@Request() req: any) {
     // Show all tickets for IT/ADMIN, only user's tickets for regular users
     const isAdmin = req.user.role === 'ADMIN' || req.user.role === 'IT';

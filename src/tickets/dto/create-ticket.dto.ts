@@ -54,6 +54,19 @@ export class CreateTicketDto {
 
   @IsOptional()
   assignee?: { id: string; name: string } | null;
+
+  // LINE OA specific fields
+  @IsString()
+  @IsOptional()
+  lineUserId?: string;
+
+  @IsString()
+  @IsOptional()
+  phoneNumber?: string;
+
+  @IsString()
+  @IsOptional()
+  lineId?: string;
 }
 
 export class FileUploadDto {

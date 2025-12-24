@@ -173,6 +173,178 @@ export class TicketsService {
     }
   }
 
+  /**
+   * สร้าง Ticket สำหรับ LINE OA (ไม่ต้องล็อกอิน)
+   * ใช้สำหรับการแจ้งซ่อมผ่าน LINE OA โดยไม่ต้องมีบัญชีในระบบ
+   */
+  async createLineOATicket(
+    createTicketDto: CreateTicketDto,
+    files?: any[],
+    lineUserId?: string,
+  ) {
+    try {
+      // Validate required fields
+      if (!createTicketDto.title || !createTicketDto.title.trim()) {
+        throw new BadRequestException('Title is required');
+      }
+      if (!createTicketDto.description || !createTicketDto.description.trim()) {
+        throw new BadRequestException('Description is required');
+      }
+      if (!createTicketDto.equipmentName || !createTicketDto.equipmentName.trim()) {
+        throw new BadRequestException('Equipment name is required');
+      }
+
+      const ticketCode = this.generateTicketCode();
+
+      // Validate enum fields
+      const validPriorities = ['LOW', 'MEDIUM', 'HIGH'];
+      const validProblemCategories = ['NETWORK', 'HARDWARE', 'SOFTWARE', 'PRINTER', 'AIR_CONDITIONING', 'ELECTRICITY', 'OTHER'];
+      const validSubcategories = ['INTERNET_DOWN', 'SLOW_CONNECTION', 'WIFI_ISSUE', 'MONITOR_BROKEN', 'KEYBOARD_BROKEN', 'MOUSE_BROKEN', 'COMPUTER_CRASH', 'INSTALLATION', 'LICENSE', 'PERFORMANCE', 'JAM', 'NO_PRINTING', 'CARTRIDGE', 'INSTALLATION_AC', 'MALFUNCTION_AC', 'POWER_DOWN', 'LIGHT_PROBLEM', 'OTHER'];
+
+      let priority: Priority = Priority.MEDIUM;
+      if (createTicketDto.priority && validPriorities.includes(createTicketDto.priority)) {
+        priority = createTicketDto.priority as Priority;
+      }
+
+      let problemCategory: ProblemCategory = ProblemCategory.HARDWARE;
+      if (createTicketDto.problemCategory && validProblemCategories.includes(createTicketDto.problemCategory)) {
+        problemCategory = createTicketDto.problemCategory as ProblemCategory;
+      }
+
+      let problemSubcategory: ProblemSubcategory = ProblemSubcategory.OTHER;
+      if (createTicketDto.problemSubcategory && validSubcategories.includes(createTicketDto.problemSubcategory)) {
+        problemSubcategory = createTicketDto.problemSubcategory as ProblemSubcategory;
+      }
+
+      // สร้าหรือค้นหา LINE OA User
+      // ก่อนอื่นตรวจสอบว่ามี user ที่เชื่อมต่อ LINE นี้อยู่หรือไม่
+      let lineOALink = null;
+      let defaultUserId = 1; // ID สำหรับ guest LINE OA users
+
+      if (lineUserId) {
+        lineOALink = await this.prisma.lineOALink.findFirst({
+          where: { lineUserId },
+        });
+
+        if (lineOALink && lineOALink.userId) {
+          defaultUserId = lineOALink.userId;
+        } else {
+          // สร้าง User ชั่วคราวสำหรับ LINE OA
+          try {
+            const newUser = await this.prisma.user.create({
+              data: {
+                name: `LINE User ${lineUserId.slice(-8)}`,
+                email: `line-${lineUserId.slice(-8)}@lineoa.local`,
+                password: 'temp-line-user',
+                role: 'USER',
+                lineId: lineUserId,
+              },
+            });
+            defaultUserId = newUser.id;
+          } catch (e) {
+            // ใช้ default user ถ้าไม่สามารถสร้าง user ใหม่ได้
+            defaultUserId = 1;
+          }
+        }
+      }
+
+      const data: Record<string, any> = {
+        ticketCode,
+        title: createTicketDto.title.trim(),
+        description: createTicketDto.description.trim(),
+        equipmentName: createTicketDto.equipmentName.trim(),
+        priority,
+        userId: defaultUserId,
+        location: createTicketDto.location?.trim() || 'N/A',
+        category: createTicketDto.category || 'REPAIR',
+        problemCategory,
+        problemSubcategory,
+      };
+
+      // เพิ่ม notes เพื่อเก็บข้อมูล LINE OA
+      const lineOAInfo = [];
+      if (createTicketDto.phoneNumber?.trim()) {
+        lineOAInfo.push(`เบอร์โทร: ${createTicketDto.phoneNumber}`);
+      }
+      if (createTicketDto.lineId?.trim()) {
+        lineOAInfo.push(`LINE ID: ${createTicketDto.lineId}`);
+      }
+      if (createTicketDto.lineUserId) {
+        lineOAInfo.push(`LINE User ID: ${createTicketDto.lineUserId}`);
+      }
+
+      if (lineOAInfo.length > 0) {
+        data.notes = lineOAInfo.join('\n');
+      }
+
+      console.log('[DEBUG] LINE OA Ticket data before create:', {
+        ticketCode: data.ticketCode,
+        title: data.title,
+        userId: data.userId,
+        lineUserId: lineUserId,
+      });
+
+      const ticket = await this.prisma.ticket.create({
+        data: data as any,
+        include: {
+          attachments: true,
+          user: {
+            select: {
+              id: true,
+              name: true,
+              email: true,
+              role: true,
+            },
+          },
+          assignee: {
+            select: {
+              id: true,
+              name: true,
+              email: true,
+            },
+          },
+        },
+      });
+
+      // Upload files
+      if (files && files.length > 0) {
+        const uploadsDir = this.ensureUploadsDir();
+        const attachments = files.map((file: any) => {
+          const filename = `${ticketCode}-${Date.now()}-${file.originalname}`;
+          const filePath = path.join(uploadsDir, filename);
+
+          fs.writeFileSync(filePath, file.buffer);
+
+          return {
+            ticketId: ticket.id,
+            filename: file.originalname,
+            fileUrl: `/uploads/${filename}`,
+            fileSize: file.size,
+            mimeType: file.mimetype,
+          };
+        });
+
+        await this.prisma.attachment.createMany({
+          data: attachments,
+        });
+      }
+
+      return {
+        ...ticket,
+        isLineOA: true,
+        lineUserId,
+      };
+    } catch (error: any) {
+      console.error('[ERROR] LINE OA Ticket creation failed:', error);
+      if (error instanceof BadRequestException) {
+        throw error;
+      }
+      throw new InternalServerErrorException(
+        error.message || 'Failed to create LINE OA ticket',
+      );
+    }
+  }
+
   async findAll(userId?: number) {
     return this.prisma.ticket.findMany({
       where: userId ? { userId } : undefined,
@@ -218,6 +390,19 @@ export class TicketsService {
             name: true,
             email: true,
             role: true,
+          },
+        },
+        logs: {
+          include: {
+            user: {
+              select: {
+                id: true,
+                name: true,
+              },
+            },
+          },
+          orderBy: {
+            createdAt: 'asc',
           },
         },
       },
