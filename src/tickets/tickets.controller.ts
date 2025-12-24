@@ -29,9 +29,28 @@ export class TicketsController {
   @UseInterceptors(FilesInterceptor('files', 5))
   create(
     @Request() req: any,
-    @Body() createTicketDto: CreateTicketDto,
+    @Body() body: any,
     @UploadedFiles() files?: any[],
   ) {
+    // Handle FormData by manually parsing form fields
+    // FormData fields come in as form-data, not JSON
+    const createTicketDto = new CreateTicketDto();
+    
+    // Map form fields to DTO - handle both JSON and FormData formats
+    createTicketDto.title = body.title || '';
+    createTicketDto.description = body.description || '';
+    createTicketDto.category = body.category || 'REPAIR';
+    createTicketDto.equipmentName = body.equipmentName || '';
+    createTicketDto.location = body.location || '';
+    createTicketDto.priority = body.priority || 'MEDIUM';
+    createTicketDto.problemCategory = body.problemCategory;
+    createTicketDto.problemSubcategory = body.problemSubcategory;
+    createTicketDto.notes = body.notes;
+    createTicketDto.requiredDate = body.requiredDate;
+    createTicketDto.equipmentId = body.equipmentId;
+    createTicketDto.status = body.status;
+    createTicketDto.assignee = body.assignee ? (typeof body.assignee === 'string' ? JSON.parse(body.assignee) : body.assignee) : null;
+
     return this.ticketsService.create(req.user.id, createTicketDto, files);
   }
 

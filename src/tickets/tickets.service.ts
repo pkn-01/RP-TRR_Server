@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, BadRequestException, InternalServerErrorException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateTicketDto } from './dto/create-ticket.dto';
 import { UpdateTicketDto } from './dto/update-ticket.dto';
@@ -31,79 +31,98 @@ export class TicketsService {
     createTicketDto: CreateTicketDto,
     files?: any[],
   ) {
-    const ticketCode = this.generateTicketCode();
+    try {
+      // Validate required fields
+      if (!createTicketDto.title || !createTicketDto.title.trim()) {
+        throw new BadRequestException('Title is required');
+      }
+      if (!createTicketDto.description || !createTicketDto.description.trim()) {
+        throw new BadRequestException('Description is required');
+      }
+      if (!createTicketDto.equipmentName || !createTicketDto.equipmentName.trim()) {
+        throw new BadRequestException('Equipment name is required');
+      }
 
-    // Build data object with only provided fields
-    const data: any = {
-      ticketCode,
-      title: createTicketDto.title,
-      description: createTicketDto.description,
-      equipmentName: createTicketDto.equipmentName,
-      priority: createTicketDto.priority || Priority.MEDIUM,
-      userId,
-      // Provide defaults for required fields
-      location: createTicketDto.location || 'N/A',
-      category: createTicketDto.category || 'OTHER',
-      problemCategory: createTicketDto.problemCategory || ProblemCategory.HARDWARE,
-      problemSubcategory: createTicketDto.problemSubcategory || ProblemSubcategory.OTHER,
-    };
+      const ticketCode = this.generateTicketCode();
 
-    // Add optional repair ticket fields if provided
-    if (createTicketDto.equipmentId !== undefined) data.equipmentId = createTicketDto.equipmentId;
-    if (createTicketDto.notes !== undefined) data.notes = createTicketDto.notes;
-    if (createTicketDto.requiredDate !== undefined) data.requiredDate = createTicketDto.requiredDate;
+      // Build data object with only provided fields
+      const data: any = {
+        ticketCode,
+        title: createTicketDto.title.trim(),
+        description: createTicketDto.description.trim(),
+        equipmentName: createTicketDto.equipmentName.trim(),
+        priority: createTicketDto.priority || Priority.MEDIUM,
+        userId,
+        // Provide defaults for required fields
+        location: createTicketDto.location?.trim() || 'N/A',
+        category: createTicketDto.category || 'REPAIR',
+        problemCategory: createTicketDto.problemCategory || ProblemCategory.HARDWARE,
+        problemSubcategory: createTicketDto.problemSubcategory || ProblemSubcategory.OTHER,
+      };
 
-    // Handle assignee if provided
-    if (createTicketDto.assignee?.id) {
-      data.assignedTo = parseInt(createTicketDto.assignee.id);
-    }
+      // Add optional repair ticket fields if provided
+      if (createTicketDto.equipmentId !== undefined) data.equipmentId = createTicketDto.equipmentId;
+      if (createTicketDto.notes !== undefined) data.notes = createTicketDto.notes;
+      if (createTicketDto.requiredDate !== undefined) data.requiredDate = createTicketDto.requiredDate;
 
-    const ticket = await this.prisma.ticket.create({
-      data,
-      include: {
-        attachments: true,
-        user: {
-          select: {
-            id: true,
-            name: true,
-            email: true,
-            role: true,
+      // Handle assignee if provided
+      if (createTicketDto.assignee?.id) {
+        data.assignedTo = parseInt(createTicketDto.assignee.id);
+      }
+
+      const ticket = await this.prisma.ticket.create({
+        data,
+        include: {
+          attachments: true,
+          user: {
+            select: {
+              id: true,
+              name: true,
+              email: true,
+              role: true,
+            },
+          },
+          assignee: {
+            select: {
+              id: true,
+              name: true,
+              email: true,
+            },
           },
         },
-        assignee: {
-          select: {
-            id: true,
-            name: true,
-            email: true,
-          },
-        },
-      },
-    });
-
-    // Handle file uploads
-    if (files && files.length > 0) {
-      const uploadsDir = this.ensureUploadsDir();
-      const attachments = files.map((file) => {
-        const filename = `${ticketCode}-${Date.now()}-${file.originalname}`;
-        const filePath = path.join(uploadsDir, filename);
-        
-        fs.writeFileSync(filePath, file.buffer);
-
-        return {
-          ticketId: ticket.id,
-          filename: file.originalname,
-          fileUrl: `/uploads/${filename}`,
-          fileSize: file.size,
-          mimeType: file.mimetype,
-        };
       });
 
-      await this.prisma.attachment.createMany({
-        data: attachments,
-      });
+      // Handle file uploads
+      if (files && files.length > 0) {
+        const uploadsDir = this.ensureUploadsDir();
+        const attachments = files.map((file) => {
+          const filename = `${ticketCode}-${Date.now()}-${file.originalname}`;
+          const filePath = path.join(uploadsDir, filename);
+          
+          fs.writeFileSync(filePath, file.buffer);
+
+          return {
+            ticketId: ticket.id,
+            filename: file.originalname,
+            fileUrl: `/uploads/${filename}`,
+            fileSize: file.size,
+            mimeType: file.mimetype,
+          };
+        });
+
+        await this.prisma.attachment.createMany({
+          data: attachments,
+        });
+      }
+
+      return ticket;
+    } catch (error: any) {
+      console.error('[ERROR] Ticket creation failed:', error);
+      if (error instanceof BadRequestException) {
+        throw error;
+      }
+      throw new InternalServerErrorException(error.message || 'Failed to create ticket');
     }
-
-    return ticket;
   }
 
   async findAll(userId?: number) {
