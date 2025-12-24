@@ -20,8 +20,9 @@ async function bootstrap() {
       whitelist: true,
       forbidNonWhitelisted: false,
       transform: true,
+      skipMissingProperties: true,
     }),
-  );
+  );;
   const port = process.env.PORT ? Number(process.env.PORT) : 3000;
   await app.listen(port);
   console.log(`Server running on http://localhost:${port}`);

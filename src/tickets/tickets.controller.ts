@@ -27,31 +27,53 @@ export class TicketsController {
 
   @Post()
   @UseInterceptors(FilesInterceptor('files', 5))
-  create(
+  async create(
     @Request() req: any,
     @Body() body: any,
     @UploadedFiles() files?: any[],
   ) {
-    // Handle FormData by manually parsing form fields
-    // FormData fields come in as form-data, not JSON
-    const createTicketDto = new CreateTicketDto();
-    
-    // Map form fields to DTO - handle both JSON and FormData formats
-    createTicketDto.title = body.title || '';
-    createTicketDto.description = body.description || '';
-    createTicketDto.category = body.category || 'REPAIR';
-    createTicketDto.equipmentName = body.equipmentName || '';
-    createTicketDto.location = body.location || '';
-    createTicketDto.priority = body.priority || 'MEDIUM';
-    createTicketDto.problemCategory = body.problemCategory;
-    createTicketDto.problemSubcategory = body.problemSubcategory;
-    createTicketDto.notes = body.notes;
-    createTicketDto.requiredDate = body.requiredDate;
-    createTicketDto.equipmentId = body.equipmentId;
-    createTicketDto.status = body.status;
-    createTicketDto.assignee = body.assignee ? (typeof body.assignee === 'string' ? JSON.parse(body.assignee) : body.assignee) : null;
+    try {
+      console.log('[DEBUG] Raw body received:', body);
+      console.log('[DEBUG] Raw request body:', req.body);
+      console.log('[DEBUG] Files received:', files?.length || 0);
 
-    return this.ticketsService.create(req.user.id, createTicketDto, files);
+      // Get form fields from body - they should be parsed by express middleware
+      const formFields = body || req.body || {};
+      
+      const createTicketDto = new CreateTicketDto();
+      
+      // Map form fields to DTO - handle both JSON and FormData formats
+      createTicketDto.title = (formFields.title || '').toString().trim();
+      createTicketDto.description = (formFields.description || '').toString().trim();
+      createTicketDto.category = (formFields.category || 'REPAIR').toString();
+      createTicketDto.equipmentName = (formFields.equipmentName || '').toString().trim();
+      createTicketDto.location = (formFields.location || '').toString().trim();
+      createTicketDto.priority = (formFields.priority || 'MEDIUM').toString();
+      createTicketDto.problemCategory = formFields.problemCategory;
+      createTicketDto.problemSubcategory = formFields.problemSubcategory;
+      createTicketDto.notes = formFields.notes;
+      createTicketDto.requiredDate = formFields.requiredDate;
+      createTicketDto.equipmentId = formFields.equipmentId;
+      createTicketDto.status = formFields.status;
+      
+      if (formFields.assignee) {
+        try {
+          createTicketDto.assignee = typeof formFields.assignee === 'string' 
+            ? JSON.parse(formFields.assignee) 
+            : formFields.assignee;
+        } catch (e) {
+          createTicketDto.assignee = null;
+        }
+      }
+
+      console.log('[DEBUG] Parsed DTO:', createTicketDto);
+      console.log('[DEBUG] User ID:', req.user.id);
+      
+      return await this.ticketsService.create(req.user.id, createTicketDto, files);
+    } catch (error: any) {
+      console.error('[ERROR] Ticket creation error:', error);
+      throw error;
+    }
   }
 
   @Get()
