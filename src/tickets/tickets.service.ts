@@ -104,6 +104,15 @@ export class TicketsService {
         }
       }
 
+      console.log('[DEBUG] Ticket data before create:', {
+        ticketCode: data.ticketCode,
+        title: data.title,
+        priority: data.priority,
+        problemCategory: data.problemCategory,
+        problemSubcategory: data.problemSubcategory,
+        userId: data.userId,
+      });
+
       const ticket = await this.prisma.ticket.create({
         data: data as any,
         include: {
@@ -151,7 +160,10 @@ export class TicketsService {
 
       return ticket;
     } catch (error: any) {
-      console.error('[ERROR] Ticket creation failed:', error);
+      console.error('[ERROR] Ticket creation failed:');
+      console.error('Error message:', error?.message);
+      console.error('Error code:', error?.code);
+      console.error('Full error:', JSON.stringify(error, null, 2));
       if (error instanceof BadRequestException) {
         throw error;
       }
