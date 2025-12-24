@@ -3,11 +3,10 @@ generator client {
 }
 
 datasource db {
-  provider = "mysql"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
 }
-
-
 
 enum Role {
   USER
@@ -74,91 +73,91 @@ enum ProblemSubcategory {
 }
 
 model User {
-  id         Int      @id @default(autoincrement())
-  name       String
-  email      String   @unique
-  password   String
-  role       Role     @default(USER)
-  department String?
+  id          Int     @id @default(autoincrement())
+  name        String
+  email       String  @unique
+  password    String
+  role        Role    @default(USER)
+  department  String?
   phoneNumber String?
-  lineId     String?
+  lineId      String?
 
-  tickets        Ticket[] @relation("UserTickets")
-  assigned       Ticket[] @relation("AssignedTickets")
-  logs           TicketLog[]
-  notifications  Notification[]
-  loans          Loan[]
-  lineOALink     LineOALink?
+  tickets       Ticket[]       @relation("UserTickets")
+  assigned      Ticket[]       @relation("AssignedTickets")
+  logs          TicketLog[]
+  notifications Notification[]
+  loans         Loan[]
+  lineOALink    LineOALink?
 
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 model Ticket {
-  id          Int      @id @default(autoincrement())
-  ticketCode  String   @unique
+  id          Int    @id @default(autoincrement())
+  ticketCode  String @unique
   title       String
   description String
-  
+
   // Problem classification
   problemCategory    ProblemCategory
   problemSubcategory ProblemSubcategory
-  
+
   // Equipment and location
-  equipmentName      String
-  equipmentId        String?
-  location           String
-  
-  category    String
-  priority    Priority
-  status      TicketStatus @default(OPEN)
-  
+  equipmentName String
+  equipmentId   String?
+  location      String
+
+  category String
+  priority Priority
+  status   TicketStatus @default(OPEN)
+
   // Repair-specific fields
-  notes       String? @db.LongText
+  notes        String? @db.Text
   requiredDate String?
-  
+
   // Attachments
   attachments Attachment[]
 
-  userId      Int
-  assignedTo  Int?
+  userId     Int
+  assignedTo Int?
 
-  user        User     @relation("UserTickets", fields: [userId], references: [id])
-  assignee    User?    @relation("AssignedTickets", fields: [assignedTo], references: [id])
-  logs        TicketLog[]
+  user     User        @relation("UserTickets", fields: [userId], references: [id])
+  assignee User?       @relation("AssignedTickets", fields: [assignedTo], references: [id])
+  logs     TicketLog[]
 
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 model Attachment {
-  id        Int     @id @default(autoincrement())
-  ticketId  Int
-  filename  String
-  fileUrl   String
-  fileSize  Int
-  mimeType  String
-  
-  ticket    Ticket  @relation(fields: [ticketId], references: [id], onDelete: Cascade)
-  
+  id       Int    @id @default(autoincrement())
+  ticketId Int
+  filename String
+  fileUrl  String
+  fileSize Int
+  mimeType String
+
+  ticket Ticket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+
   createdAt DateTime @default(now())
 }
 
 model TicketLog {
-  id         Int      @id @default(autoincrement())
-  ticketId   Int
-  status     TicketStatus
-  comment    String?
-  updatedBy  Int
+  id        Int          @id @default(autoincrement())
+  ticketId  Int
+  status    TicketStatus
+  comment   String?
+  updatedBy Int
 
-  ticket     Ticket   @relation(fields: [ticketId], references: [id])
-  user       User     @relation(fields: [updatedBy], references: [id])
+  ticket Ticket @relation(fields: [ticketId], references: [id])
+  user   User   @relation(fields: [updatedBy], references: [id])
 
-  createdAt  DateTime @default(now())
+  createdAt DateTime @default(now())
 }
 
 model Notification {
-  id        Int      @id @default(autoincrement())
+  id        Int                @id @default(autoincrement())
   userId    Int
   type      NotificationType
   status    NotificationStatus @default(UNREAD)
@@ -166,9 +165,9 @@ model Notification {
   message   String
   ticketId  Int?
   actionUrl String?
-  
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
@@ -181,26 +180,26 @@ enum LoanStatus {
 }
 
 model Loan {
-  id                   Int        @id @default(autoincrement())
-  itemName             String
-  description          String?
-  quantity             Int        @default(1)
-  borrowDate           DateTime   @default(now())
-  expectedReturnDate   DateTime
-  returnDate           DateTime?
-  status               LoanStatus @default(BORROWED)
-  
+  id                 Int        @id @default(autoincrement())
+  itemName           String
+  description        String?
+  quantity           Int        @default(1)
+  borrowDate         DateTime   @default(now())
+  expectedReturnDate DateTime
+  returnDate         DateTime?
+  status             LoanStatus @default(BORROWED)
+
   // Borrower contact information
-  borrowerName         String?
-  borrowerDepartment   String?
-  borrowerPhone        String?
-  borrowerLineId       String?
-  
-  userId               Int
-  borrowedBy           User       @relation(fields: [userId], references: [id], onDelete: Cascade)
-  
-  createdAt            DateTime   @default(now())
-  updatedAt            DateTime   @updatedAt
+  borrowerName       String?
+  borrowerDepartment String?
+  borrowerPhone      String?
+  borrowerLineId     String?
+
+  userId     Int
+  borrowedBy User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 // LINE OA Integration Models
@@ -211,18 +210,18 @@ enum LineLinkStatus {
 }
 
 model LineOALink {
-  id        Int      @id @default(autoincrement())
-  userId    Int      @unique
-  lineUserId String?
+  id          Int            @id @default(autoincrement())
+  userId      Int            @unique
+  lineUserId  String?
   displayName String?
-  pictureUrl String?
-  status    LineLinkStatus @default(PENDING)
-  
-  verificationToken String?
+  pictureUrl  String?
+  status      LineLinkStatus @default(PENDING)
+
+  verificationToken  String?
   verificationExpiry DateTime?
-  
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
@@ -234,16 +233,16 @@ enum LineNotificationStatus {
 }
 
 model LineNotification {
-  id        Int      @id @default(autoincrement())
+  id         Int                    @id @default(autoincrement())
   lineUserId String
-  type      String
-  title     String
-  message   String
-  status    LineNotificationStatus @default(SENT)
-  
-  retryCount Int    @default(0)
+  type       String
+  title      String
+  message    String
+  status     LineNotificationStatus @default(SENT)
+
+  retryCount   Int     @default(0)
   errorMessage String?
-  
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
