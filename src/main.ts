@@ -18,9 +18,9 @@ async function bootstrap() {
     allowedHeaders: 'Content-Type, Accept, Authorization',
   })
 
-  // Configure body size limit to 50MB for file uploads
-  app.use(json({ limit: '50mb' }));
-  app.use(urlencoded({ limit: '50mb', extended: true }));
+  // Configure body size limit to 20MB for file uploads
+  app.use(json({ limit: '20mb' }));
+  app.use(urlencoded({ limit: '20mb', extended: true }));
 
   app.useGlobalPipes(
     new ValidationPipe({

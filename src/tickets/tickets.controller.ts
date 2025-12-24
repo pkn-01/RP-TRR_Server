@@ -29,7 +29,7 @@ export class TicketsController {
   @Post()
   @UseGuards(JwtAuthGuard)
   @UseInterceptors(
-    FilesInterceptor('files', 5, {
+    FilesInterceptor('files', 3, {
       storage: diskStorage({
         destination: (req, file, cb) => {
           cb(null, 'uploads/');
@@ -40,7 +40,7 @@ export class TicketsController {
         },
       }),
       limits: {
-        fileSize: 10 * 1024 * 1024, // 10MB per file
+        fileSize: 5 * 1024 * 1024, // 5MB per file
       },
     }),
   )
@@ -98,7 +98,7 @@ export class TicketsController {
    */
   @Post('line-oa')
   @UseInterceptors(
-    FilesInterceptor('files', 5, {
+    FilesInterceptor('files', 3, {
       storage: diskStorage({
         destination: (req, file, cb) => {
           cb(null, 'uploads/');
@@ -109,7 +109,7 @@ export class TicketsController {
         },
       }),
       limits: {
-        fileSize: 10 * 1024 * 1024, // 10MB per file
+        fileSize: 5 * 1024 * 1024, // 5MB per file
       },
     }),
   )
