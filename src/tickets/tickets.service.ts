@@ -218,7 +218,7 @@ export class TicketsService {
 
       // สร้าหรือค้นหา LINE OA User
       // ก่อนอื่นตรวจสอบว่ามี user ที่เชื่อมต่อ LINE นี้อยู่หรือไม่
-      let lineOALink = null;
+      let lineOALink: any = null;
       let defaultUserId = 1; // ID สำหรับ guest LINE OA users
 
       if (lineUserId) {
@@ -262,7 +262,7 @@ export class TicketsService {
       };
 
       // เพิ่ม notes เพื่อเก็บข้อมูล LINE OA
-      const lineOAInfo = [];
+      const lineOAInfo: string[] = [];
       if (createTicketDto.phoneNumber?.trim()) {
         lineOAInfo.push(`เบอร์โทร: ${createTicketDto.phoneNumber}`);
       }

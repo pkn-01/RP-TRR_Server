@@ -13,7 +13,7 @@ import {
   NotFoundException,
   BadRequestException,
   InternalServerErrorException,
-  Header,
+  Headers,
 } from '@nestjs/common';
 import { FilesInterceptor } from '@nestjs/platform-express';
 import { JwtAuthGuard } from '../auth/jwt.guard';
@@ -84,9 +84,10 @@ export class TicketsController {
   @UseInterceptors(FilesInterceptor('files', 5))
   async createLineOATicket(
     @Body() body: any,
-    @Header('X-LINE-USER-ID') lineUserId?: string,
+    @Headers() headers: any,
     @UploadedFiles() files?: any[],
   ) {
+    const lineUserId = headers['x-line-user-id'];
     try {
       console.log('[DEBUG] LINE OA Ticket creation');
       console.log('[DEBUG] LINE User ID:', lineUserId);
