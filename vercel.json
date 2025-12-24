@@ -1,4 +1,8 @@
 {
-  "buildCommand": "npm run build && npm run prisma:migrate",
-  "outputDirectory": "dist"
+  "buildCommand": "npm run build",
+  "outputDirectory": "dist",
+  "env": {
+    "PRISMA_SKIP_POSTINSTALL_CHECK": "true"
+  }
 }
+
