@@ -6,8 +6,11 @@ import { AppModule } from './app.module';
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
   // Enable CORS so frontend (Next.js) can call this API
+  const corsOrigin = process.env.CORS_ORIGIN || 'http://localhost:3000';
+  const origins = corsOrigin.split(',').map(origin => origin.trim());
+  
   app.enableCors({
-    origin: process.env.CORS_ORIGIN || 'http://localhost:3000',
+    origin: origins.length > 1 ? origins : origins[0],
     methods: 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS',
     credentials: true,
     allowedHeaders: 'Content-Type, Accept, Authorization',
