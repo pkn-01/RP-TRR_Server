@@ -16,6 +16,7 @@ import {
   Headers,
 } from '@nestjs/common';
 import { FilesInterceptor } from '@nestjs/platform-express';
+import { diskStorage } from 'multer';
 import { JwtAuthGuard } from '../auth/jwt.guard';
 import { TicketsService } from './tickets.service';
 import { CreateTicketDto } from './dto/create-ticket.dto';
@@ -27,7 +28,22 @@ export class TicketsController {
 
   @Post()
   @UseGuards(JwtAuthGuard)
-  @UseInterceptors(FilesInterceptor('files', 5))
+  @UseInterceptors(
+    FilesInterceptor('files', 5, {
+      storage: diskStorage({
+        destination: (req, file, cb) => {
+          cb(null, 'uploads/');
+        },
+        filename: (req, file, cb) => {
+          const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
+          cb(null, file.fieldname + '-' + uniqueSuffix + '-' + file.originalname);
+        },
+      }),
+      limits: {
+        fileSize: 10 * 1024 * 1024, // 10MB per file
+      },
+    }),
+  )
   async create(
     @Request() req: any,
     @Body() body: any,
@@ -81,7 +97,22 @@ export class TicketsController {
    * สร้าง Ticket สำหรับ LINE OA (ไม่ต้องเข้าสู่ระบบ)
    */
   @Post('line-oa')
-  @UseInterceptors(FilesInterceptor('files', 5))
+  @UseInterceptors(
+    FilesInterceptor('files', 5, {
+      storage: diskStorage({
+        destination: (req, file, cb) => {
+          cb(null, 'uploads/');
+        },
+        filename: (req, file, cb) => {
+          const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
+          cb(null, file.fieldname + '-' + uniqueSuffix + '-' + file.originalname);
+        },
+      }),
+      limits: {
+        fileSize: 10 * 1024 * 1024, // 10MB per file
+      },
+    }),
+  )
   async createLineOATicket(
     @Body() body: any,
     @Headers() headers: any,
