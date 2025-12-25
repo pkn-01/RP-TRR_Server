@@ -24,12 +24,21 @@ export class StorageService {
     // dynamic import to avoid hard dependency at build time
     const { S3Client } = await import('@aws-sdk/client-s3');
     const region = process.env.S3_REGION;
-    const credentials = {
-      accessKeyId: process.env.S3_ACCESS_KEY_ID,
-      secretAccessKey: process.env.S3_SECRET_ACCESS_KEY,
-    };
     const endpoint = process.env.S3_ENDPOINT;
-    const s3 = new S3Client({ region, credentials, endpoint, forcePathStyle: !!process.env.S3_FORCE_PATH_STYLE });
+    const forcePathStyle = process.env.S3_FORCE_PATH_STYLE === 'true';
+
+    const config: any = {};
+    if (region) config.region = region;
+    if (endpoint) config.endpoint = endpoint;
+    if (forcePathStyle) config.forcePathStyle = forcePathStyle;
+    if (process.env.S3_ACCESS_KEY_ID && process.env.S3_SECRET_ACCESS_KEY) {
+      config.credentials = {
+        accessKeyId: process.env.S3_ACCESS_KEY_ID,
+        secretAccessKey: process.env.S3_SECRET_ACCESS_KEY,
+      };
+    }
+
+    const s3 = new S3Client(config as any);
     this.client = s3;
     return this.client;
   }

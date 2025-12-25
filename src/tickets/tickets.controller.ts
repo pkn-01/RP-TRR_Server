@@ -15,6 +15,7 @@ import {
   InternalServerErrorException,
   Headers,
   ForbiddenException,
+  Logger,
 } from '@nestjs/common';
 import { FilesInterceptor } from '@nestjs/platform-express';
 import { memoryStorage } from 'multer';
@@ -22,7 +23,6 @@ import { JwtAuthGuard } from '../auth/jwt.guard';
 import { TicketsService } from './tickets.service';
 import { CreateTicketDto } from './dto/create-ticket.dto';
 import { UpdateTicketDto } from './dto/update-ticket.dto';
-  Logger,
 
 @Controller('api/tickets')
 export class TicketsController {
