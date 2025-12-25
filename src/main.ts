@@ -19,23 +19,10 @@ async function bootstrap() {
   })
 
   // Configure body size limit to 20MB for file uploads
-  // Apply conditional middleware: skip JSON/urlencoded for multipart, but allow raw processing
-  app.use((req, res, next) => {
-    if (req.is('multipart/form-data')) {
-      // For multipart requests, don't parse as JSON - let FilesInterceptor handle it
-      next();
-    } else {
-      // For other requests, parse as JSON
-      json({ limit: '20mb' })(req, res, next);
-    }
-  });
-  app.use((req, res, next) => {
-    if (req.is('multipart/form-data')) {
-      next();
-    } else {
-      urlencoded({ limit: '20mb', extended: true })(req, res, next);
-    }
-  });
+  // For JSON requests
+  app.use(json({ limit: '20mb' }));
+  // For URL-encoded requests
+  app.use(urlencoded({ limit: '20mb', extended: true }));
 
   app.useGlobalPipes(
     new ValidationPipe({

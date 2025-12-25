@@ -137,25 +137,36 @@ export class TicketsService {
 
       // Handle file uploads
       if (files && files.length > 0) {
-        const uploadsDir = this.ensureUploadsDir();
-        const attachments = files.map((file: any) => {
-          const filename = `${ticketCode}-${Date.now()}-${file.originalname}`;
-          const filePath = path.join(uploadsDir, filename);
+        try {
+          const uploadsDir = this.ensureUploadsDir();
+          const attachments = files.map((file: any) => {
+            const filename = `${ticketCode}-${Date.now()}-${file.originalname}`;
+            const filePath = path.join(uploadsDir, filename);
 
-          fs.writeFileSync(filePath, file.buffer);
+            // Try to write file, but don't fail if it doesn't work (e.g., on Vercel)
+            try {
+              fs.writeFileSync(filePath, file.buffer);
+            } catch (fsError) {
+              console.warn('[WARN] Failed to write file to disk:', fsError);
+              // Continue anyway - file metadata will still be stored in DB
+            }
 
-          return {
-            ticketId: ticket.id,
-            filename: file.originalname,
-            fileUrl: `/uploads/${filename}`,
-            fileSize: file.size,
-            mimeType: file.mimetype,
-          };
-        });
+            return {
+              ticketId: ticket.id,
+              filename: file.originalname,
+              fileUrl: `/uploads/${filename}`,
+              fileSize: file.size,
+              mimeType: file.mimetype,
+            };
+          });
 
-        await this.prisma.attachment.createMany({
-          data: attachments,
-        });
+          await this.prisma.attachment.createMany({
+            data: attachments,
+          });
+        } catch (attachmentError) {
+          console.error('[WARN] Failed to save attachments:', attachmentError);
+          // Don't fail the entire operation if attachments fail
+        }
       }
 
       return ticket;
@@ -308,25 +319,36 @@ export class TicketsService {
 
       // Upload files
       if (files && files.length > 0) {
-        const uploadsDir = this.ensureUploadsDir();
-        const attachments = files.map((file: any) => {
-          const filename = `${ticketCode}-${Date.now()}-${file.originalname}`;
-          const filePath = path.join(uploadsDir, filename);
+        try {
+          const uploadsDir = this.ensureUploadsDir();
+          const attachments = files.map((file: any) => {
+            const filename = `${ticketCode}-${Date.now()}-${file.originalname}`;
+            const filePath = path.join(uploadsDir, filename);
 
-          fs.writeFileSync(filePath, file.buffer);
+            // Try to write file, but don't fail if it doesn't work (e.g., on Vercel)
+            try {
+              fs.writeFileSync(filePath, file.buffer);
+            } catch (fsError) {
+              console.warn('[WARN] Failed to write file to disk:', fsError);
+              // Continue anyway - file metadata will still be stored in DB
+            }
 
-          return {
-            ticketId: ticket.id,
-            filename: file.originalname,
-            fileUrl: `/uploads/${filename}`,
-            fileSize: file.size,
-            mimeType: file.mimetype,
-          };
-        });
+            return {
+              ticketId: ticket.id,
+              filename: file.originalname,
+              fileUrl: `/uploads/${filename}`,
+              fileSize: file.size,
+              mimeType: file.mimetype,
+            };
+          });
 
-        await this.prisma.attachment.createMany({
-          data: attachments,
-        });
+          await this.prisma.attachment.createMany({
+            data: attachments,
+          });
+        } catch (attachmentError) {
+          console.error('[WARN] Failed to save attachments:', attachmentError);
+          // Don't fail the entire operation if attachments fail
+        }
       }
 
       return {
