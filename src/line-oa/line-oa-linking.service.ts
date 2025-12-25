@@ -17,54 +17,78 @@ export class LineOALinkingService {
    * เริ่มต้นกระบวนการเชื่อมต่อบัญชี LINE
    */
   async initiateLinking(userId: number) {
-    // สร้าง verification token
-    const verificationToken = crypto.randomBytes(32).toString('hex');
-    const expiryTime = new Date(Date.now() + 15 * 60 * 1000); // 15 นาทีจากนี้
+    try {
+      // Validate userId
+      if (!userId || userId < 1) {
+        throw new BadRequestException('Invalid user ID');
+      }
 
-    // ตรวจสอบว่าผู้ใช้มีการเชื่อมต่อแล้วหรือไม่
-    const existingLink = await this.prisma.lineOALink.findUnique({
-      where: { userId },
-    });
+      // ตรวจสอบว่าผู้ใช้มีอยู่ในระบบ
+      const user = await this.prisma.user.findUnique({
+        where: { id: userId },
+      });
 
-    if (existingLink && existingLink.status === 'VERIFIED') {
-      return {
-        message: 'Account already linked',
-        isLinked: true,
-      };
-    }
+      if (!user) {
+        throw new BadRequestException('User not found');
+      }
 
-    // สร้างหรืออัปเดต linking record
-    if (existingLink) {
-      await this.prisma.lineOALink.update({
+      // สร้าง verification token
+      const verificationToken = crypto.randomBytes(32).toString('hex');
+      const expiryTime = new Date(Date.now() + 15 * 60 * 1000); // 15 นาทีจากนี้
+
+      // ตรวจสอบว่าผู้ใช้มีการเชื่อมต่อแล้วหรือไม่
+      const existingLink = await this.prisma.lineOALink.findUnique({
         where: { userId },
-        data: {
-          verificationToken,
-          verificationExpiry: expiryTime,
-          status: 'PENDING',
-        },
       });
-    } else {
-      await this.prisma.lineOALink.create({
-        data: {
-          userId,
-          lineUserId: '', // ชั่วคราว
-          verificationToken,
-          verificationExpiry: expiryTime,
-          status: 'PENDING',
-        },
-      });
+
+      if (existingLink && existingLink.status === 'VERIFIED') {
+        return {
+          message: 'Account already linked',
+          isLinked: true,
+        };
+      }
+
+      // สร้างหรืออัปเดต linking record
+      if (existingLink) {
+        await this.prisma.lineOALink.update({
+          where: { userId },
+          data: {
+            verificationToken,
+            verificationExpiry: expiryTime,
+            status: 'PENDING',
+          },
+        });
+      } else {
+        await this.prisma.lineOALink.create({
+          data: {
+            userId,
+            lineUserId: '', // ชั่วคราว
+            verificationToken,
+            verificationExpiry: expiryTime,
+            status: 'PENDING',
+          },
+        });
+      }
+
+      // สร้าง LINE login URL
+      const linkingUrl = this.generateLinkingUrl(verificationToken);
+
+      this.logger.log(`Initiated LINE linking for user ${userId}`);
+
+      return {
+        linkingUrl,
+        verificationToken,
+        expiresIn: 900, // 900 วินาที = 15 นาที
+        message:
+          'Please scan the QR code or click the link to link your LINE account',
+      };
+    } catch (error) {
+      this.logger.error(
+        `Failed to initiate LINE linking for user ${userId}:`,
+        error,
+      );
+      throw error;
     }
-
-    // สร้าง LINE login URL
-    const linkingUrl = this.generateLinkingUrl(verificationToken);
-
-    return {
-      linkingUrl,
-      verificationToken,
-      expiresIn: 900, // 900 วินาที = 15 นาที
-      message:
-        'Please scan the QR code or click the link to link your LINE account',
-    };
   }
 
   /**
@@ -75,29 +99,99 @@ export class LineOALinkingService {
     lineUserId: string,
     verificationToken: string,
   ) {
-    // ตรวจสอบ linking record
-    const linkingRecord = await this.prisma.lineOALink.findFirst({
-      where: {
-        userId,
-        verificationToken,
-      },
-    });
+    try {
+      // Validate inputs
+      if (!userId || userId < 1) {
+        throw new BadRequestException('Invalid user ID');
+      }
 
-    if (!linkingRecord) {
-      throw new BadRequestException('Invalid verification token');
+      if (!lineUserId || !lineUserId.trim()) {
+        throw new BadRequestException('Invalid LINE User ID');
+      }
+
+      if (!verificationToken || !verificationToken.trim()) {
+        throw new BadRequestException('Invalid verification token');
+      }
+
+      // ตรวจสอบว่าผู้ใช้มีอยู่ในระบบ
+      const user = await this.prisma.user.findUnique({
+        where: { id: userId },
+      });
+
+      if (!user) {
+        throw new BadRequestException('User not found');
+      }
+
+      // ตรวจสอบ linking record
+      const linkingRecord = await this.prisma.lineOALink.findFirst({
+        where: {
+          userId,
+          verificationToken,
+        },
+      });
+
+      if (!linkingRecord) {
+        throw new BadRequestException('Invalid verification token');
+      }
+
+      // ตรวจสอบว่า token ยังไม่หมดอายุ
+      if (
+        linkingRecord.verificationExpiry &&
+        linkingRecord.verificationExpiry < new Date()
+      ) {
+        throw new BadRequestException('Verification token expired');
+      }
+
+      // ตรวจสอบว่า LINE User ID ไม่ได้ถูกใช้โดยผู้ใช้คนอื่น
+      const existingLink = await this.prisma.lineOALink.findFirst({
+        where: { lineUserId }
+      });
+
+      if (existingLink && existingLink.userId !== userId) {
+        throw new BadRequestException('This LINE account is already linked');
+      }
+
+      // อัปเดต linking record
+      const updatedLink = await this.prisma.lineOALink.update({
+        where: { userId },
+        data: {
+          lineUserId,
+          status: 'VERIFIED',
+          verificationToken: null,
+          verificationExpiry: null,
+        },
+        include: {
+          user: {
+            select: {
+              id: true,
+              name: true,
+              email: true,
+            },
+          },
+        },
+      });
+
+      this.logger.log(
+        `User ${userId} linked with LINE account ${lineUserId}`,
+      );
+
+      return {
+        message: 'Account linked successfully',
+        data: {
+          userId: updatedLink.userId,
+          lineUserId: updatedLink.lineUserId,
+          status: updatedLink.status,
+          linkedAt: updatedLink.updatedAt,
+        },
+      };
+    } catch (error) {
+      this.logger.error(
+        `Failed to verify LINE linking for user ${userId}:`,
+        error,
+      );
+      throw error;
     }
-
-    // ตรวจสอบว่า token ยังไม่หมดอายุ
-    if (
-      linkingRecord.verificationExpiry &&
-      linkingRecord.verificationExpiry < new Date()
-    ) {
-      throw new BadRequestException('Verification token expired');
-    }
-
-    // ตรวจสอบว่า LINE User ID ไม่ได้ถูกใช้โดยผู้ใช้คนอื่น
-    const existingLink = await this.prisma.lineOALink.findFirst({
-      where: { lineUserId },
+  }
     });
 
     if (existingLink && existingLink.userId !== userId) {

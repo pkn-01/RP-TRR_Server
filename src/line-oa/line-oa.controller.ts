@@ -29,7 +29,29 @@ export class LineOAController {
   async initiateLinking(
     @Body('userId') userId: number = 1, // Default to user 1 for testing
   ) {
-    return await this.linkingService.initiateLinking(userId || 1);
+    try {
+      // Validate input
+      const finalUserId = userId || 1;
+      if (!finalUserId || finalUserId < 1) {
+        return {
+          success: false,
+          message: 'Invalid user ID',
+          code: 400,
+        };
+      }
+
+      const result = await this.linkingService.initiateLinking(finalUserId);
+      return {
+        success: true,
+        ...result,
+      };
+    } catch (error: any) {
+      return {
+        success: false,
+        message: error?.message || 'Failed to initiate LINE linking',
+        code: error?.status || 500,
+      };
+    }
   }
 
   /**
@@ -41,11 +63,49 @@ export class LineOAController {
     @Body('lineUserId') lineUserId: string,
     @Body('verificationToken') verificationToken: string,
   ) {
-    return await this.linkingService.verifyLink(
-      userId || 1,
-      lineUserId,
-      verificationToken,
-    );
+    try {
+      // Validate required fields
+      if (!lineUserId || !lineUserId.trim()) {
+        return {
+          success: false,
+          message: 'LINE User ID is required',
+          code: 400,
+        };
+      }
+
+      if (!verificationToken || !verificationToken.trim()) {
+        return {
+          success: false,
+          message: 'Verification token is required',
+          code: 400,
+        };
+      }
+
+      const finalUserId = userId || 1;
+      if (!finalUserId || finalUserId < 1) {
+        return {
+          success: false,
+          message: 'Invalid user ID',
+          code: 400,
+        };
+      }
+
+      const result = await this.linkingService.verifyLink(
+        finalUserId,
+        lineUserId.trim(),
+        verificationToken.trim(),
+      );
+      return {
+        success: true,
+        ...result,
+      };
+    } catch (error: any) {
+      return {
+        success: false,
+        message: error?.message || 'Failed to verify LINE linking',
+        code: error?.status || 500,
+      };
+    }
   }
 
   /**
