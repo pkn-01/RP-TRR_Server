@@ -12,8 +12,10 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
   }
 
   async validate(payload: any) {
+    // Normalize user object: include both `sub` and `id` for compatibility
     return {
       sub: payload.sub,
+      id: payload.sub,
       role: payload.role,
     };
   }

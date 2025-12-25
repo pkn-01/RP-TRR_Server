@@ -6,8 +6,12 @@ import { UsersModule } from './users/users.module';
 import { LoansModule } from './loans/loans.module';
 import { LineOAModule } from './line-oa/line-oa.module';
 import { StorageModule } from './storage/storage.module';
+import { AppController } from './app.controller';
+import { AppService } from './app.service';
 
 @Module({
   imports: [AuthModule, TicketsModule, NotificationModule, UsersModule, LoansModule, LineOAModule, StorageModule],
+  controllers: [AppController],
+  providers: [AppService],
 })
 export class AppModule {}
