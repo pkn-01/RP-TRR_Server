@@ -8,7 +8,7 @@ import { json, urlencoded, raw } from 'express';
 async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
   // Enable CORS so frontend (Next.js) can call this API
-  const corsOrigin = process.env.CORS_ORIGIN || 'https://rp-trr-server-mbyi.vercel.app/;
+  const corsOrigin = process.env.CORS_ORIGIN || 'https://rp-trr-server-mbyi.vercel.app';
   const origins = corsOrigin.split(',').map(origin => origin.trim());
   
   app.enableCors({
