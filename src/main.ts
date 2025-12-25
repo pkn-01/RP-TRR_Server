@@ -4,6 +4,7 @@ import { NestFactory } from '@nestjs/core';
 import { NestExpressApplication } from '@nestjs/platform-express';
 import { AppModule } from './app.module';
 import { json, urlencoded } from 'express';
+import { StorageService } from './storage/storage.service';
 
 async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
@@ -61,6 +62,16 @@ async function bootstrap() {
   /* ================= Listen ================= */
   const port = Number(process.env.PORT) || 3000;
   await app.listen(port);
+
+  // Optional: schedule cleanup job for old uploads
+  const enableCleanup = process.env.ENABLE_CLEANUP === 'true';
+  const retentionDays = Number(process.env.UPLOAD_RETENTION_DAYS || 30);
+  if (enableCleanup) {
+    const storage = app.get(StorageService);
+    // run cleanup immediately and then once a day
+    storage.cleanupOldFiles(retentionDays).catch((e) => console.warn('Cleanup error', e));
+    setInterval(() => storage.cleanupOldFiles(retentionDays).catch((e) => console.warn('Cleanup error', e)), 24 * 60 * 60 * 1000);
+  }
 
   console.log(`🚀 Server running on http://localhost:${port}`);
 }

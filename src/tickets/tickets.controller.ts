@@ -14,36 +14,35 @@ import {
   BadRequestException,
   InternalServerErrorException,
   Headers,
+  ForbiddenException,
 } from '@nestjs/common';
 import { FilesInterceptor } from '@nestjs/platform-express';
-import { diskStorage } from 'multer';
+import { memoryStorage } from 'multer';
 import { JwtAuthGuard } from '../auth/jwt.guard';
 import { TicketsService } from './tickets.service';
 import { CreateTicketDto } from './dto/create-ticket.dto';
 import { UpdateTicketDto } from './dto/update-ticket.dto';
+  Logger,
 
 @Controller('api/tickets')
 export class TicketsController {
+  private readonly logger = new Logger(TicketsController.name);
   constructor(private ticketsService: TicketsService) {}
 
   @Post()
   @UseGuards(JwtAuthGuard)
   @UseInterceptors(
     FilesInterceptor('files', 3, {
-      storage: diskStorage({
-        destination: (req, file, cb) => {
-          cb(null, 'uploads/');
-        },
-        filename: (req, file, cb) => {
-          const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
-          cb(null, file.fieldname + '-' + uniqueSuffix + '-' + file.originalname);
-        },
-      }),
+      storage: memoryStorage(),
       limits: {
         fileSize: 5 * 1024 * 1024, // 5MB per file
       },
       fileFilter: (req, file, cb) => {
-        // Accept all files
+        // Allow images and PDF only
+        const allowed = file.mimetype.startsWith('image/') || file.mimetype === 'application/pdf';
+        if (!allowed) {
+          return cb(null, false);
+        }
         cb(null, true);
       },
     }),
@@ -56,9 +55,9 @@ export class TicketsController {
       // For multipart/form-data, fields are in req.body after FilesInterceptor processes them
       const formFields = req.body || {};
       
-      console.log('[DEBUG] Form fields received:', formFields);
-      console.log('[DEBUG] Files received:', files?.length || 0);
-      console.log('[DEBUG] User ID:', req.user.id);
+      this.logger.debug(`Form fields received: ${JSON.stringify(formFields)}`);
+      this.logger.debug(`Files received: ${files?.length || 0}`);
+      this.logger.debug(`User ID: ${req.user.id}`);
 
       const createTicketDto = new CreateTicketDto();
       
@@ -86,11 +85,11 @@ export class TicketsController {
         }
       }
 
-      console.log('[DEBUG] Parsed DTO:', createTicketDto);
+      this.logger.debug(`Parsed DTO: ${JSON.stringify({ title: createTicketDto.title, equipmentName: createTicketDto.equipmentName })}`);
       
       return await this.ticketsService.create(req.user.id, createTicketDto, files);
     } catch (error: any) {
-      console.error('[ERROR] Ticket creation error:', error);
+      this.logger.error('[ERROR] Ticket creation error:', error?.message || error);
       throw error;
     }
   }
@@ -101,20 +100,16 @@ export class TicketsController {
   @Post('line-oa')
   @UseInterceptors(
     FilesInterceptor('files', 3, {
-      storage: diskStorage({
-        destination: (req, file, cb) => {
-          cb(null, 'uploads/');
-        },
-        filename: (req, file, cb) => {
-          const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
-          cb(null, file.fieldname + '-' + uniqueSuffix + '-' + file.originalname);
-        },
-      }),
+      storage: memoryStorage(),
       limits: {
         fileSize: 5 * 1024 * 1024, // 5MB per file
       },
       fileFilter: (req, file, cb) => {
-        // Accept all files
+        // Allow images and PDF only
+        const allowed = file.mimetype.startsWith('image/') || file.mimetype === 'application/pdf';
+        if (!allowed) {
+          return cb(null, false);
+        }
         cb(null, true);
       },
     }),
@@ -126,10 +121,10 @@ export class TicketsController {
   ) {
     const lineUserId = headers['x-line-user-id'];
     try {
-      console.log('[DEBUG] LINE OA Ticket creation');
-      console.log('[DEBUG] LINE User ID:', lineUserId);
-      console.log('[DEBUG] Form fields:', req.body);
-      console.log('[DEBUG] Files received:', files?.length || 0);
+      this.logger.debug('[DEBUG] LINE OA Ticket creation');
+      this.logger.debug('[DEBUG] LINE User ID:', lineUserId);
+      this.logger.debug('[DEBUG] Form fields:', req.body);
+      this.logger.debug('[DEBUG] Files received:', files?.length || 0);
 
       const formFields = req.body || {};
       
@@ -150,7 +145,7 @@ export class TicketsController {
 
       return await this.ticketsService.createLineOATicket(createTicketDto, files, lineUserId);
     } catch (error: any) {
-      console.error('[ERROR] LINE OA Ticket creation error:', error);
+      this.logger.error('[ERROR] LINE OA Ticket creation error:', error?.message || error);
       throw error;
     }
   }
@@ -164,19 +159,25 @@ export class TicketsController {
   }
 
   @Get(':id')
-  async findOne(@Param('id') id: string) {
-    console.log(`[DEBUG] Fetching ticket with ID: ${id}`);
+  @UseGuards(JwtAuthGuard)
+  async findOne(@Param('id') id: string, @Request() req: any) {
     try {
       const ticket = await this.ticketsService.findOne(+id);
-      console.log(`[DEBUG] Ticket found:`, ticket ? 'Yes' : 'No');
       if (!ticket) {
         throw new NotFoundException(`Ticket with ID ${id} not found`);
       }
-      console.log(`[DEBUG] Ticket ID:`, ticket.id, `Title:`, ticket.title);
+
+      // Authorization: allow owner, IT or ADMIN
+      const isAdmin = req.user.role === 'ADMIN' || req.user.role === 'IT';
+      if (!isAdmin && ticket.userId !== req.user.id) {
+        throw new ForbiddenException('You do not have access to this ticket');
+      }
+
+      this.logger.debug(`[DEBUG] Ticket ID: ${ticket.id}, Title: ${ticket.title}`);
       return ticket;
     } catch (error: any) {
-      console.error(`[ERROR] Error fetching ticket ${id}:`, error.message);
-      if (error instanceof NotFoundException) {
+      this.logger.error(`[ERROR] Error fetching ticket ${id}:`, error.message);
+      if (error instanceof NotFoundException || error instanceof ForbiddenException) {
         throw error;
       }
       throw new InternalServerErrorException(`Failed to fetch ticket: ${error.message}`);
@@ -184,15 +185,38 @@ export class TicketsController {
   }
 
   @Put(':id')
-  update(
+  @UseGuards(JwtAuthGuard)
+  async update(
     @Param('id') id: string,
     @Body() updateTicketDto: UpdateTicketDto,
+    @Request() req: any,
   ) {
+    const ticket = await this.ticketsService.findOne(+id);
+    if (!ticket) {
+      throw new NotFoundException(`Ticket with ID ${id} not found`);
+    }
+
+    const isAdmin = req.user.role === 'ADMIN' || req.user.role === 'IT';
+    if (!isAdmin && ticket.userId !== req.user.id) {
+      throw new ForbiddenException('You do not have permission to update this ticket');
+    }
+
     return this.ticketsService.update(+id, updateTicketDto);
   }
 
   @Delete(':id')
-  remove(@Param('id') id: string) {
+  @UseGuards(JwtAuthGuard)
+  async remove(@Param('id') id: string, @Request() req: any) {
+    const ticket = await this.ticketsService.findOne(+id);
+    if (!ticket) {
+      throw new NotFoundException(`Ticket with ID ${id} not found`);
+    }
+
+    const isAdmin = req.user.role === 'ADMIN' || req.user.role === 'IT';
+    if (!isAdmin && ticket.userId !== req.user.id) {
+      throw new ForbiddenException('You do not have permission to delete this ticket');
+    }
+
     return this.ticketsService.remove(+id);
   }
 }

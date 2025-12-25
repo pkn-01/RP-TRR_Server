@@ -4,15 +4,18 @@ import {
   InternalServerErrorException,
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { StorageService } from '../storage/storage.service';
 import { CreateTicketDto } from './dto/create-ticket.dto';
 import { UpdateTicketDto } from './dto/update-ticket.dto';
 import { Priority, ProblemCategory, ProblemSubcategory } from '@prisma/client';
 import * as path from 'path';
 import * as fs from 'fs';
+import * as bcrypt from 'bcrypt';
+import * as crypto from 'crypto';
 
 @Injectable()
 export class TicketsService {
-  constructor(private prisma: PrismaService) {}
+  constructor(private prisma: PrismaService, private storage: StorageService) {}
 
   private generateTicketCode(): string {
     const timestamp = Date.now().toString().slice(-6);
@@ -141,37 +144,27 @@ export class TicketsService {
         },
       });
 
-      // Handle file uploads
+      // Handle file uploads via StorageService
       if (files && files.length > 0) {
         try {
-          const uploadsDir = this.ensureUploadsDir();
-          const attachments = files.map((file: any) => {
-            const filename = `${ticketCode}-${Date.now()}-${file.originalname}`;
-            const filePath = path.join(uploadsDir, filename);
-
-            // Try to write file, but don't fail if it doesn't work (e.g., on Vercel)
-            try {
-              fs.writeFileSync(filePath, file.buffer);
-            } catch (fsError) {
-              console.warn('[WARN] Failed to write file to disk:', fsError);
-              // Continue anyway - file metadata will still be stored in DB
-            }
-
-            return {
+          const attachments: any[] = [];
+          for (const file of files) {
+            const filename = `${ticketCode}-${Date.now()}-${file.originalname.replace(/[^a-zA-Z0-9_.-]/g, '_')}`;
+            const key = `tickets/${filename}`;
+            const uploaded = await this.storage.uploadBuffer(key, file.buffer, file.mimetype);
+            attachments.push({
               ticketId: ticket.id,
               filename: file.originalname,
-              fileUrl: `/uploads/${filename}`,
-              fileSize: file.size,
+              fileUrl: uploaded.url,
+              fileSize: file.size || (file.buffer ? file.buffer.length : 0),
               mimeType: file.mimetype,
-            };
-          });
+            });
+          }
 
-          await this.prisma.attachment.createMany({
-            data: attachments,
-          });
+          await this.prisma.attachment.createMany({ data: attachments });
         } catch (attachmentError) {
-          console.error('[WARN] Failed to save attachments:', attachmentError);
-          // Don't fail the entire operation if attachments fail
+          // Log and continue
+          this.storage['logger']?.warn('[WARN] Failed to save attachments:', attachmentError?.message || attachmentError);
         }
       }
 
@@ -259,20 +252,44 @@ export class TicketsService {
         if (lineOALink && lineOALink.userId) {
           defaultUserId = lineOALink.userId;
         } else {
-          // สร้าง User ชั่วคราวสำหรับ LINE OA
+          // สร้าง User ชั่วคราวสำหรับ LINE OA อย่างปลอดภัย: สร้างรหัสผ่านสุ่มและ hash
           try {
+            const randomPassword = crypto.randomBytes(16).toString('hex');
+            const hashed = await bcrypt.hash(randomPassword, 10);
+
+            // Create a safe unique email using hex of lineUserId to avoid collisions and invalid chars
+            const safeSuffix = Buffer.from(lineUserId).toString('hex');
+            const email = `line-${safeSuffix}@lineoa.local`;
+
             const newUser = await this.prisma.user.create({
               data: {
                 name: `LINE User ${lineUserId.slice(-8)}`,
-                email: `line-${lineUserId.slice(-8)}@lineoa.local`,
-                password: 'temp-line-user',
+                email,
+                password: hashed,
                 role: 'USER',
                 lineId: lineUserId,
               },
             });
+
+            // Optionally create a LineOALink record to link this LINE user to the created user
+            try {
+              await this.prisma.lineOALink.create({
+                data: {
+                  userId: newUser.id,
+                  lineUserId,
+                  displayName: createTicketDto.lineId || undefined,
+                  status: 'VERIFIED',
+                },
+              });
+            } catch (linkErr) {
+              // Not critical — continue even if link cannot be created
+              console.warn('[WARN] Could not create LineOALink:', linkErr?.message || linkErr);
+            }
+
             defaultUserId = newUser.id;
           } catch (e) {
             // ใช้ default user ถ้าไม่สามารถสร้าง user ใหม่ได้
+            console.warn('[WARN] Failed to create LINE OA user:', e?.message || e);
             defaultUserId = 1;
           }
         }
