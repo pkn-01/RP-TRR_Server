@@ -3,7 +3,7 @@ import { ValidationPipe } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { NestExpressApplication } from '@nestjs/platform-express';
 import { AppModule } from './app.module';
-import { json, urlencoded } from 'express';
+import { json, urlencoded, raw } from 'express';
 
 async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
@@ -19,11 +19,13 @@ async function bootstrap() {
   })
 
   // Configure body size limit to 20MB for file uploads
-  // Skip JSON parsing for multipart routes to allow file uploads
+  // Apply conditional middleware: skip JSON/urlencoded for multipart, but allow raw processing
   app.use((req, res, next) => {
     if (req.is('multipart/form-data')) {
+      // For multipart requests, don't parse as JSON - let FilesInterceptor handle it
       next();
     } else {
+      // For other requests, parse as JSON
       json({ limit: '20mb' })(req, res, next);
     }
   });
