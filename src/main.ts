@@ -12,7 +12,7 @@ async function bootstrap() {
   const corsOrigin =
     process.env.CORS_ORIGIN || 'https://rp-trr-server-mbyi.vercel.app';
 
-  const origins = corsOrigin.split(',').map(o => o.trim());
+  const origins = corsOrigin.split(',').map((o) => o.trim());
 
   app.enableCors({
     origin: origins.length === 1 ? origins[0] : origins,
@@ -25,8 +25,8 @@ async function bootstrap() {
   app.use(
     json({
       limit: '20mb',
-      type: (req: any) => {
-        const contentType = req.headers['content-type'] || '';
+      type: (req: any): boolean => {
+        const contentType = (req.headers['content-type'] as string) || '';
         return (
           contentType.includes('application/json') &&
           !contentType.includes('multipart/form-data')
@@ -39,8 +39,8 @@ async function bootstrap() {
     urlencoded({
       limit: '20mb',
       extended: true,
-      type: (req: any) => {
-        const contentType = req.headers['content-type'] || '';
+      type: (req: any): boolean => {
+        const contentType = (req.headers['content-type'] as string) || '';
         return (
           contentType.includes('application/x-www-form-urlencoded') &&
           !contentType.includes('multipart/form-data')
@@ -65,4 +65,4 @@ async function bootstrap() {
   console.log(`🚀 Server running on http://localhost:${port}`);
 }
 
-bootstrap();
+void bootstrap();
