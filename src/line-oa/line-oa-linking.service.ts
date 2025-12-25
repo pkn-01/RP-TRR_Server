@@ -192,44 +192,6 @@ export class LineOALinkingService {
       throw error;
     }
   }
-    });
-
-    if (existingLink && existingLink.userId !== userId) {
-      throw new BadRequestException('This LINE account is already linked');
-    }
-
-    // อัปเดต linking record
-    const updatedLink = await this.prisma.lineOALink.update({
-      where: { userId },
-      data: {
-        lineUserId,
-        status: 'VERIFIED',
-        verificationToken: null,
-        verificationExpiry: null,
-      },
-      include: {
-        user: {
-          select: {
-            id: true,
-            name: true,
-            email: true,
-          },
-        },
-      },
-    });
-
-    this.logger.log(`User ${userId} linked with LINE account ${lineUserId}`);
-
-    return {
-      message: 'Account linked successfully',
-      data: {
-        userId: updatedLink.userId,
-        lineUserId: updatedLink.lineUserId,
-        status: updatedLink.status,
-        linkedAt: updatedLink.updatedAt,
-      },
-    };
-  }
 
   /**
    * ดึงสถานะการเชื่อมต่อ LINE
