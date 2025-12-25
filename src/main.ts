@@ -20,12 +20,20 @@ async function bootstrap() {
 
   // Configure body size limit to 20MB for file uploads
   // Skip JSON parsing for multipart routes to allow file uploads
-  app.use(json({ limit: '20mb', skip: (req) => {
-    return req.is('multipart/form-data');
-  } }));
-  app.use(urlencoded({ limit: '20mb', extended: true, skip: (req) => {
-    return req.is('multipart/form-data');
-  } }));
+  app.use((req, res, next) => {
+    if (req.is('multipart/form-data')) {
+      next();
+    } else {
+      json({ limit: '20mb' })(req, res, next);
+    }
+  });
+  app.use((req, res, next) => {
+    if (req.is('multipart/form-data')) {
+      next();
+    } else {
+      urlencoded({ limit: '20mb', extended: true })(req, res, next);
+    }
+  });
 
   app.useGlobalPipes(
     new ValidationPipe({
