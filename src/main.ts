@@ -19,10 +19,28 @@ async function bootstrap() {
   })
 
   // Configure body size limit to 20MB for file uploads
-  // For JSON requests
-  app.use(json({ limit: '20mb' }));
-  // For URL-encoded requests
-  app.use(urlencoded({ limit: '20mb', extended: true }));
+  // Skip JSON/urlencoded parsing for multipart requests (let FilesInterceptor handle it)
+  app.use(json({ 
+    limit: '20mb',
+    type: (req) => {
+      // Skip parsing if multipart form data
+      if (req.is('multipart/form-data')) {
+        return false;
+      }
+      return req.is('application/json');
+    }
+  }));
+  app.use(urlencoded({ 
+    limit: '20mb', 
+    extended: true,
+    type: (req) => {
+      // Skip parsing if multipart form data
+      if (req.is('multipart/form-data')) {
+        return false;
+      }
+      return req.is('application/x-www-form-urlencoded');
+    }
+  }));
 
   app.useGlobalPipes(
     new ValidationPipe({
@@ -34,7 +52,7 @@ async function bootstrap() {
   );;
   const port = process.env.PORT ? Number(process.env.PORT) : 3000;
   await app.listen(port);
-  console.log(`Server running on http://localhost:${port}`);
+  console.log(`Server running on https://rp-trr-server-mbyi.vercel.app:${port}`);
 }
 
 bootstrap();
