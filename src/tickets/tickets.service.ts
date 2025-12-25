@@ -47,6 +47,12 @@ export class TicketsService {
         throw new BadRequestException('Equipment name is required');
       }
 
+      console.log('[DEBUG] Validation passed, creating ticket...');
+      console.log('[DEBUG] User ID:', userId);
+      console.log('[DEBUG] Title:', createTicketDto.title);
+      console.log('[DEBUG] Category:', createTicketDto.problemCategory);
+      console.log('[DEBUG] Subcategory:', createTicketDto.problemSubcategory);
+
       const ticketCode = this.generateTicketCode();
 
       // Validate enum fields before using them
@@ -171,13 +177,26 @@ export class TicketsService {
 
       return ticket;
     } catch (error: any) {
-      console.error('[ERROR] Ticket creation failed:');
+      console.error('[ERROR] Ticket creation failed');
+      console.error('Error type:', error?.constructor?.name);
       console.error('Error message:', error?.message);
       console.error('Error code:', error?.code);
-      console.error('Full error:', JSON.stringify(error, null, 2));
+      console.error('Stack:', error?.stack);
+      
+      // For Prisma errors, log the specific issue
+      if (error?.code) {
+        console.error('[PRISMA ERROR]', {
+          code: error.code,
+          message: error.message,
+          meta: error.meta,
+        });
+      }
+      
       if (error instanceof BadRequestException) {
         throw error;
       }
+      
+      // Don't expose internal error details to client
       throw new InternalServerErrorException(
         error.message || 'Failed to create ticket',
       );

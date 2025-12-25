@@ -42,24 +42,27 @@ export class TicketsController {
       limits: {
         fileSize: 5 * 1024 * 1024, // 5MB per file
       },
+      fileFilter: (req, file, cb) => {
+        // Accept all files
+        cb(null, true);
+      },
     }),
   )
   async create(
     @Request() req: any,
-    @Body() body: any,
     @UploadedFiles() files?: any[],
   ) {
     try {
-      console.log('[DEBUG] Raw body received:', body);
-      console.log('[DEBUG] Raw request body:', req.body);
-      console.log('[DEBUG] Files received:', files?.length || 0);
-
-      // Get form fields from body - they should be parsed by express middleware
-      const formFields = body || req.body || {};
+      // For multipart/form-data, fields are in req.body after FilesInterceptor processes them
+      const formFields = req.body || {};
       
+      console.log('[DEBUG] Form fields received:', formFields);
+      console.log('[DEBUG] Files received:', files?.length || 0);
+      console.log('[DEBUG] User ID:', req.user.id);
+
       const createTicketDto = new CreateTicketDto();
       
-      // Map form fields to DTO - handle both JSON and FormData formats
+      // Map form fields to DTO - handle FormData format
       createTicketDto.title = (formFields.title || '').toString().trim();
       createTicketDto.description = (formFields.description || '').toString().trim();
       createTicketDto.category = (formFields.category || 'REPAIR').toString();
@@ -84,7 +87,6 @@ export class TicketsController {
       }
 
       console.log('[DEBUG] Parsed DTO:', createTicketDto);
-      console.log('[DEBUG] User ID:', req.user.id);
       
       return await this.ticketsService.create(req.user.id, createTicketDto, files);
     } catch (error: any) {
@@ -111,10 +113,14 @@ export class TicketsController {
       limits: {
         fileSize: 5 * 1024 * 1024, // 5MB per file
       },
+      fileFilter: (req, file, cb) => {
+        // Accept all files
+        cb(null, true);
+      },
     }),
   )
   async createLineOATicket(
-    @Body() body: any,
+    @Request() req: any,
     @Headers() headers: any,
     @UploadedFiles() files?: any[],
   ) {
@@ -122,9 +128,10 @@ export class TicketsController {
     try {
       console.log('[DEBUG] LINE OA Ticket creation');
       console.log('[DEBUG] LINE User ID:', lineUserId);
+      console.log('[DEBUG] Form fields:', req.body);
       console.log('[DEBUG] Files received:', files?.length || 0);
 
-      const formFields = body || {};
+      const formFields = req.body || {};
       
       const createTicketDto = new CreateTicketDto();
       
