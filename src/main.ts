@@ -3,56 +3,66 @@ import { ValidationPipe } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { NestExpressApplication } from '@nestjs/platform-express';
 import { AppModule } from './app.module';
-import { json, urlencoded, raw } from 'express';
+import { json, urlencoded } from 'express';
 
 async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
-  // Enable CORS so frontend (Next.js) can call this API
-  const corsOrigin = process.env.CORS_ORIGIN || 'https://rp-trr-server-mbyi.vercel.app';
-  const origins = corsOrigin.split(',').map(origin => origin.trim());
-  
+
+  /* ================= CORS ================= */
+  const corsOrigin =
+    process.env.CORS_ORIGIN || 'https://rp-trr-server-mbyi.vercel.app';
+
+  const origins = corsOrigin.split(',').map(o => o.trim());
+
   app.enableCors({
-    origin: origins.length > 1 ? origins : origins[0],
-    methods: 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS',
+    origin: origins.length === 1 ? origins[0] : origins,
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
     credentials: true,
-    allowedHeaders: 'Content-Type, Accept, Authorization',
-  })
+    allowedHeaders: ['Content-Type', 'Authorization'],
+  });
 
-  // Configure body size limit to 20MB for file uploads
-  // Skip JSON/urlencoded parsing for multipart requests (let FilesInterceptor handle it)
-  app.use(json({ 
-    limit: '20mb',
-    type: (req) => {
-      // Skip parsing if multipart form data
-      if (req.is('multipart/form-data')) {
-        return false;
-      }
-      return req.is('application/json');
-    }
-  }));
-  app.use(urlencoded({ 
-    limit: '20mb', 
-    extended: true,
-    type: (req) => {
-      // Skip parsing if multipart form data
-      if (req.is('multipart/form-data')) {
-        return false;
-      }
-      return req.is('application/x-www-form-urlencoded');
-    }
-  }));
+  /* ================= Body Parser ================= */
+  app.use(
+    json({
+      limit: '20mb',
+      type: (req: any) => {
+        const contentType = req.headers['content-type'] || '';
+        return (
+          contentType.includes('application/json') &&
+          !contentType.includes('multipart/form-data')
+        );
+      },
+    }),
+  );
 
+  app.use(
+    urlencoded({
+      limit: '20mb',
+      extended: true,
+      type: (req: any) => {
+        const contentType = req.headers['content-type'] || '';
+        return (
+          contentType.includes('application/x-www-form-urlencoded') &&
+          !contentType.includes('multipart/form-data')
+        );
+      },
+    }),
+  );
+
+  /* ================= Validation ================= */
   app.useGlobalPipes(
     new ValidationPipe({
       whitelist: true,
-      forbidNonWhitelisted: false,
       transform: true,
       skipMissingProperties: true,
     }),
-  );;
-  const port = process.env.PORT ? Number(process.env.PORT) : 3000;
+  );
+
+  /* ================= Listen ================= */
+  const port = Number(process.env.PORT) || 3000;
   await app.listen(port);
-  console.log(`Server running on https://rp-trr-server-mbyi.vercel.app:${port}`);
+
+  console.log(`🚀 Server running on http://localhost:${port}`);
 }
 
 bootstrap();
